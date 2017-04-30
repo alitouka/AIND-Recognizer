@@ -79,16 +79,17 @@ class SelectorBIC(ModelSelector):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         # TODO implement model selection based on BIC scores
+        n = len(self.X) # Number of observations
         best_model = None
         min_score = None
 
         for i in range(self.min_n_components, self.max_n_components+1):
             try:
                 model = self.base_model(i)
+                num_states = model.n_components
+                num_zeros_in_transition_matrix = len(model.transmat_.flatten())-np.count_nonzero(model.transmat_)
+                p = num_states * (num_states - 1) + num_zeros_in_transition_matrix
                 logL = model.score(self.X, self.lengths) # Log likelihood
-                p = len(self.X[0])                       # Number of features
-                n = len(self.X)                          # Number of observations
-
                 bic = -2.0 * logL + p * math.log(n)
 
                 if min_score is None or bic < min_score:
