@@ -7,6 +7,8 @@ from hmmlearn.hmm import GaussianHMM
 from sklearn.model_selection import KFold
 from asl_utils import combine_sequences
 
+import timeit
+from asl_data import AslDb
 
 class ModelSelector(object):
     '''
@@ -77,7 +79,26 @@ class SelectorBIC(ModelSelector):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         # TODO implement model selection based on BIC scores
-        raise NotImplementedError
+        best_model = None
+        min_score = None
+
+        for i in range(self.min_n_components, self.max_n_components+1):
+            try:
+                model = self.base_model(i)
+                logL = model.score(self.X, self.lengths) # Log likelihood
+                p = len(self.X[0])                       # Number of features
+                n = len(self.X)                          # Number of observations
+
+                bic = -2.0 * logL + p * math.log(n)
+
+                if min_score is None or bic < min_score:
+                    min_score = bic
+                    best_model = model
+            except:
+                if self.verbose:
+                    print("Failed to compute BIC for " + str(i) + "-state model for " + self.this_word)
+
+        return best_model
 
 
 class SelectorDIC(ModelSelector):
@@ -106,3 +127,27 @@ class SelectorCV(ModelSelector):
 
         # TODO implement model selection using CV
         raise NotImplementedError
+
+if __name__ == "__main__":
+    words_to_train = ['FISH', 'BOOK', 'VEGETABLE', 'FUTURE', 'JOHN']
+    features_ground = ['grnd-rx', 'grnd-ry', 'grnd-lx', 'grnd-ly']
+
+    asl = AslDb()  # initializes the database
+
+    asl.df['grnd-rx'] = asl.df['right-x'] - asl.df['nose-x']
+    asl.df['grnd-ly'] = asl.df['left-y'] - asl.df['nose-y']
+    asl.df['grnd-lx'] = asl.df['left-x'] - asl.df['nose-x']
+    asl.df['grnd-ry'] = asl.df['right-y'] - asl.df['nose-y']
+
+    training = asl.build_training(features_ground)  # Experiment here with different feature sets defined in part 1
+    sequences = training.get_all_sequences()
+    Xlengths = training.get_all_Xlengths()
+    for word in words_to_train:
+        start = timeit.default_timer()
+        model = SelectorBIC(sequences, Xlengths, word,
+                            min_n_components=2, max_n_components=15, random_state=14).select()
+        end = timeit.default_timer() - start
+        if model is not None:
+            print("Training complete for {} with {} states with time {} seconds".format(word, model.n_components, end))
+        else:
+            print("Training failed for {}".format(word))
