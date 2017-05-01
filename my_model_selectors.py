@@ -78,7 +78,6 @@ class SelectorBIC(ModelSelector):
         """
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on BIC scores
         n = len(self.X) # Number of observations
         best_model = None
         min_score = None
@@ -116,7 +115,6 @@ class SelectorDIC(ModelSelector):
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection based on DIC scores
         best_model = None
         max_score = None
         M = len(self.hwords)
@@ -154,8 +152,35 @@ class SelectorCV(ModelSelector):
     def select(self):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-        # TODO implement model selection using CV
-        raise NotImplementedError
+        split_method = KFold(n_splits=2)
+        best_model = None
+        max_score = None
+
+        for i in range(self.min_n_components, self.max_n_components + 1):
+            try:
+                n_folds = 0
+                sum_likelihoods = 0
+
+                for cv_train_idx, cv_test_idx in split_method.split(self.sequences):
+                    self.X, self.lengths = combine_sequences(cv_train_idx, self.sequences)
+                    model = self.base_model(i)
+
+                    test_x, test_lengths = combine_sequences(cv_test_idx, self.sequences)
+                    logL = model.score(test_x, test_lengths)
+
+                    sum_likelihoods = sum_likelihoods + logL
+                    n_folds += 1
+
+                avg_likelihood = sum_likelihoods / n_folds
+
+                if max_score is None or avg_likelihood > max_score:
+                    max_score = avg_likelihood
+                    best_model = model
+            except:
+                if self.verbose:
+                    print("Failed to perform cross-validation for " + str(i) + "-state model for " + self.this_word)
+
+        return best_model
 
 if __name__ == "__main__":
     words_to_train = ['FISH', 'BOOK', 'VEGETABLE', 'FUTURE', 'JOHN']
@@ -171,9 +196,13 @@ if __name__ == "__main__":
     training = asl.build_training(features_ground)  # Experiment here with different feature sets defined in part 1
     sequences = training.get_all_sequences()
     Xlengths = training.get_all_Xlengths()
+
+    for word in words_to_train:
+        x = sequences[word]
+
     for word in words_to_train:
         start = timeit.default_timer()
-        model = SelectorDIC(sequences, Xlengths, word,
+        model = SelectorCV(sequences, Xlengths, word,
                             min_n_components=2, max_n_components=15, random_state=14).select()
         end = timeit.default_timer() - start
         if model is not None:
