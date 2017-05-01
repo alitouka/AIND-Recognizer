@@ -88,6 +88,8 @@ class SelectorBIC(ModelSelector):
                 model = self.base_model(i)
                 num_states = model.n_components
                 num_zeros_in_transition_matrix = len(model.transmat_.flatten())-np.count_nonzero(model.transmat_)
+
+                # According to https://stats.stackexchange.com/questions/117258/what-are-parameters-in-a-model-and-how-do-i-get-them?rq=1
                 p = num_states * (num_states - 1) + num_zeros_in_transition_matrix
                 logL = model.score(self.X, self.lengths) # Log likelihood
                 bic = -2.0 * logL + p * math.log(n)
@@ -115,7 +117,33 @@ class SelectorDIC(ModelSelector):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         # TODO implement model selection based on DIC scores
-        raise NotImplementedError
+        best_model = None
+        max_score = None
+        M = len(self.hwords)
+
+        for i in range(self.min_n_components, self.max_n_components + 1):
+            try:
+                model = self.base_model(i)
+
+                logL = model.score(self.X, self.lengths)
+                sum_anti_likelihoods = 0.0
+
+                for w in self.words:
+                    if w != self.this_word:
+                        w_x, w_lengths = self.hwords[w]
+                        sum_anti_likelihoods = sum_anti_likelihoods + model.score(w_x, w_lengths)
+
+                average_anti_likelihood = sum_anti_likelihoods / (M-1)
+                dic = logL - average_anti_likelihood
+
+                if max_score is None or dic > max_score:
+                    max_score = dic
+                    best_model = model
+            except:
+                if self.verbose:
+                    print("Failed to compute DIC for " + str(i) + "-state model for " + self.this_word)
+
+        return best_model
 
 
 class SelectorCV(ModelSelector):
@@ -145,7 +173,7 @@ if __name__ == "__main__":
     Xlengths = training.get_all_Xlengths()
     for word in words_to_train:
         start = timeit.default_timer()
-        model = SelectorBIC(sequences, Xlengths, word,
+        model = SelectorDIC(sequences, Xlengths, word,
                             min_n_components=2, max_n_components=15, random_state=14).select()
         end = timeit.default_timer() - start
         if model is not None:
