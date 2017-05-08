@@ -7,9 +7,6 @@ from hmmlearn.hmm import GaussianHMM
 from sklearn.model_selection import KFold
 from asl_utils import combine_sequences
 
-import timeit
-from asl_data import AslDb
-
 class ModelSelector(object):
     '''
     base class for model selection (strategy design pattern)
@@ -126,8 +123,11 @@ class SelectorDIC(ModelSelector):
                 logL = model.score(self.X, self.lengths)
                 sum_anti_likelihoods = 0.0
 
+                # Calculating likelihoods for all words except self.this_word
                 for w in self.words:
                     if w != self.this_word:
+                        
+                        # Data for each word: w_x are coordinates, w_lengths are number of frames
                         w_x, w_lengths = self.hwords[w]
                         sum_anti_likelihoods = sum_anti_likelihoods + model.score(w_x, w_lengths)
 
@@ -181,31 +181,3 @@ class SelectorCV(ModelSelector):
                     print("Failed to perform cross-validation for " + str(i) + "-state model for " + self.this_word)
 
         return best_model
-
-if __name__ == "__main__":
-    words_to_train = ['FISH', 'BOOK', 'VEGETABLE', 'FUTURE', 'JOHN']
-    features_ground = ['grnd-rx', 'grnd-ry', 'grnd-lx', 'grnd-ly']
-
-    asl = AslDb()  # initializes the database
-
-    asl.df['grnd-rx'] = asl.df['right-x'] - asl.df['nose-x']
-    asl.df['grnd-ly'] = asl.df['left-y'] - asl.df['nose-y']
-    asl.df['grnd-lx'] = asl.df['left-x'] - asl.df['nose-x']
-    asl.df['grnd-ry'] = asl.df['right-y'] - asl.df['nose-y']
-
-    training = asl.build_training(features_ground)  # Experiment here with different feature sets defined in part 1
-    sequences = training.get_all_sequences()
-    Xlengths = training.get_all_Xlengths()
-
-    for word in words_to_train:
-        x = sequences[word]
-
-    for word in words_to_train:
-        start = timeit.default_timer()
-        model = SelectorCV(sequences, Xlengths, word,
-                            min_n_components=2, max_n_components=15, random_state=14).select()
-        end = timeit.default_timer() - start
-        if model is not None:
-            print("Training complete for {} with {} states with time {} seconds".format(word, model.n_components, end))
-        else:
-            print("Training failed for {}".format(word))
